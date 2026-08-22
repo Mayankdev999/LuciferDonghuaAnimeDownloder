@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TheAnimeLink - Video Source Extractor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="background-glow top-left"></div>
+    <div class="background-glow bottom-right"></div>
+
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="logo-wrapper">
+                <div class="logo-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                    </svg>
+                </div>
+                <div class="logo-text">
+                    <h1>TheAnimeLink <span>Extractor</span></h1>
+                </div>
+            </div>
+            <div class="header-badge">
+                <span class="status-indicator"></span>
+                <span>Chrome 124 JA3 Bypass</span>
+            </div>
+        </header>
+
+        <!-- Main Card -->
+        <main class="main-card">
+            <div class="card-intro">
+                <h2>Extract Embedded Video Sources</h2>
+                <p>Extract iframe embeds and Dailymotion source links with advanced TLS/JA3 bot impersonation.</p>
+            </div>
+
+            <!-- Input Form -->
+            <form id="extract-form" class="extract-form">
+                <div class="input-wrapper">
+                    <div class="input-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                        </svg>
+                    </div>
+                    <input 
+                        type="url" 
+                        id="target-url" 
+                        placeholder="Paste target webpage URL (e.g., https://...)" 
+                        required 
+                        autocomplete="off"
+                        spellcheck="false"
+                    />
+                    <div class="input-actions">
+                        <button type="button" id="paste-btn" class="icon-btn" title="Paste from clipboard">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+                                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                            </svg>
+                        </button>
+                        <button type="button" id="clear-btn" class="icon-btn hidden" title="Clear input">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <button type="submit" id="submit-btn" class="submit-btn">
+                    <span class="btn-text">Extract Links</span>
+                    <div class="spinner hidden"></div>
+                    <svg class="btn-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                        <polyline points="12 5 19 12 12 19"></polyline>
+                    </svg>
+                </button>
+            </form>
+
+            <!-- Status Alerts -->
+            <div id="status-container" class="status-container hidden">
+                <div class="status-box" id="status-box">
+                    <div class="status-icon" id="status-icon"></div>
+                    <div class="status-content">
+                        <h4 id="status-title">Notice</h4>
+                        <p id="status-message">Status details go here.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results Section -->
+            <section id="results-section" class="results-section hidden">
+                <div class="results-header">
+                    <div class="results-meta">
+                        <span class="meta-badge count-badge" id="results-count">0 Links Found</span>
+                        <span class="meta-badge source-badge" id="results-source">Source: -</span>
+                    </div>
+                    <button type="button" id="open-all-btn" class="action-btn secondary hidden">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                            <polyline points="15 3 21 3 21 9"></polyline>
+                            <line x1="10" y1="14" x2="21" y2="3"></line>
+                        </svg>
+                        <span>Open All in SaveTheVideo</span>
+                    </button>
+                </div>
+
+                <div id="links-list" class="links-list">
+                    <!-- Dynamic link items will be inserted here -->
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="app-footer">
+            <p>TheAnimeLink Extractor &bull; Built with FastAPI &amp; curl_cffi Chrome124 Spoofing</p>
+        </footer>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast hidden">Copied to clipboard!</div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>
