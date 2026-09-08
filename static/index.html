@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TheAnimeLink - Video Source Extractor</title>
+    <title>TheAnimeLink - Universal Donghua Hub</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -23,7 +23,7 @@
                     </svg>
                 </div>
                 <div class="logo-text">
-                    <h1>TheAnimeLink <span>Extractor</span></h1>
+                    <h1>TheAnimeLink <span>Hub</span></h1>
                 </div>
             </div>
             <div class="header-badge">
@@ -32,18 +32,131 @@
             </div>
         </header>
 
-        <!-- Main Card -->
-        <main class="main-card">
-            <div class="card-intro">
-                <h2>Extract Embedded Video Sources</h2>
-                <p>Extract iframe embeds and Dailymotion source links with advanced TLS/JA3 bot impersonation.</p>
-            </div>
+        <!-- Navigation Tabs -->
+        <nav class="nav-tabs">
+            <button type="button" class="tab-btn active" data-tab="bookmarks-tab">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                </svg>
+                <span>Bookmarks</span>
+                <span class="tab-counter hidden" id="bookmarks-count">0</span>
+            </button>
+            <button type="button" class="tab-btn" data-tab="search-tab">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                <span>Search Anime</span>
+            </button>
+            <button type="button" class="tab-btn" data-tab="direct-tab">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                </svg>
+                <span>Direct URL</span>
+            </button>
+        </nav>
 
-            <!-- Input Form -->
-            <form id="extract-form" class="extract-form">
+        <!-- Status Container -->
+        <div id="status-container" class="status-container hidden">
+            <div class="status-box" id="status-box">
+                <div class="status-icon" id="status-icon"></div>
+                <div class="status-content">
+                    <h4 id="status-title">Notice</h4>
+                    <p id="status-message">Status details go here.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 1: BOOKMARKS (Saved Anime) -->
+        <section id="bookmarks-tab" class="tab-content active">
+            <div class="section-top-bar">
+                <div>
+                    <h2>Pinned Favorites</h2>
+                    <p class="subtitle">Quick access to your saved Donghua and individual watch progress.</p>
+                </div>
+            </div>
+            <div id="bookmarks-grid" class="anime-grid">
+                <!-- Bookmarked anime cards injected here -->
+            </div>
+            <div id="bookmarks-empty" class="empty-state">
+                <div class="empty-icon">⭐</div>
+                <h3>No Bookmarks Yet</h3>
+                <p>Search for an anime series and click the ⭐ icon to pin it here for instant 1-click access!</p>
+                <button type="button" class="action-btn primary-action switch-to-search-btn">Go to Search</button>
+            </div>
+        </section>
+
+        <!-- TAB 2: SEARCH ANIME -->
+        <section id="search-tab" class="tab-content hidden">
+            <div class="section-top-bar">
+                <div>
+                    <h2>Search Donghua</h2>
+                    <p class="subtitle">Browse any series from LuciferDonghua without ads or popups.</p>
+                </div>
+            </div>
+            <form id="search-form" class="search-form">
                 <div class="input-wrapper">
                     <div class="input-icon">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                    </div>
+                    <input 
+                        type="text" 
+                        id="search-input" 
+                        placeholder="Search any anime (e.g., Perfect World, BTTH, Renegade Immortal)..." 
+                        required 
+                        autocomplete="off"
+                        spellcheck="false"
+                    />
+                    <button type="button" id="search-clear-btn" class="icon-btn hidden" title="Clear">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    </button>
+                </div>
+                <button type="submit" id="search-submit-btn" class="submit-btn">
+                    <span class="btn-text">Search</span>
+                    <div class="spinner hidden"></div>
+                </button>
+            </form>
+
+            <!-- Quick Picks / Popular Donghua -->
+            <div class="quick-picks-container">
+                <span class="quick-picks-label">🔥 Quick Search:</span>
+                <div class="quick-picks-chips">
+                    <button type="button" class="quick-pick-chip">Battle Through The Heavens</button>
+                    <button type="button" class="quick-pick-chip">Perfect World</button>
+                    <button type="button" class="quick-pick-chip">Renegade Immortal</button>
+                    <button type="button" class="quick-pick-chip">Swallowed Star</button>
+                    <button type="button" class="quick-pick-chip">Soul Land 2</button>
+                    <button type="button" class="quick-pick-chip">A Will Eternal</button>
+                    <button type="button" class="quick-pick-chip">Throne of Seal</button>
+                </div>
+            </div>
+
+            <div id="search-results-wrapper" class="search-results-wrapper hidden">
+                <div class="results-header">
+                    <span class="meta-badge count-badge" id="search-count">0 Results Found</span>
+                </div>
+                <div id="search-grid" class="anime-grid">
+                    <!-- Search results cards injected here -->
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 3: DIRECT URL EXTRACTOR -->
+        <section id="direct-tab" class="tab-content hidden">
+            <div class="section-top-bar">
+                <div>
+                    <h2>Direct Episode URL Extractor</h2>
+                    <p class="subtitle">Paste an individual episode URL to extract and route to SaveTheVideo.</p>
+                </div>
+            </div>
+            <form id="extract-form" class="extract-form">
+                <div class="input-wrapper">
+                    <div class="input-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
                             <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
                         </svg>
@@ -51,78 +164,209 @@
                     <input 
                         type="url" 
                         id="target-url" 
-                        placeholder="Paste target webpage URL (e.g., https://...)" 
+                        placeholder="Paste episode webpage URL..." 
                         required 
                         autocomplete="off"
                         spellcheck="false"
                     />
                     <div class="input-actions">
                         <button type="button" id="paste-btn" class="icon-btn" title="Paste from clipboard">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
                                 <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
                             </svg>
                         </button>
                         <button type="button" id="clear-btn" class="icon-btn hidden" title="Clear input">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <line x1="18" y1="6" x2="6" y2="18"></line>
                                 <line x1="6" y1="6" x2="18" y2="18"></line>
                             </svg>
                         </button>
                     </div>
                 </div>
-
                 <button type="submit" id="submit-btn" class="submit-btn">
                     <span class="btn-text">Extract Links</span>
                     <div class="spinner hidden"></div>
-                    <svg class="btn-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                        <line x1="5" y1="12" x2="19" y2="12"></line>
-                        <polyline points="12 5 19 12 12 19"></polyline>
-                    </svg>
                 </button>
             </form>
 
-            <!-- Status Alerts -->
-            <div id="status-container" class="status-container hidden">
-                <div class="status-box" id="status-box">
-                    <div class="status-icon" id="status-icon"></div>
-                    <div class="status-content">
-                        <h4 id="status-title">Notice</h4>
-                        <p id="status-message">Status details go here.</p>
+            <section id="direct-results-section" class="results-section hidden">
+                <div class="results-header">
+                    <div class="results-meta">
+                        <span class="meta-badge count-badge" id="direct-results-count">0 Links Found</span>
+                        <span class="meta-badge source-badge" id="direct-results-source">Source: -</span>
+                    </div>
+                    <button type="button" id="direct-open-all-btn" class="action-btn secondary hidden">
+                        <span>Open All in SaveTheVideo</span>
+                    </button>
+                </div>
+                <div id="direct-links-list" class="links-list"></div>
+            </section>
+        </section>
+
+        <!-- VIEW: SERIES DETAILS & EPISODES (Dynamic viewer) -->
+        <section id="series-view" class="series-view hidden">
+            <div class="series-nav-back">
+                <button type="button" id="back-to-list-btn" class="back-btn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="19" y1="12" x2="5" y2="12"></line>
+                        <polyline points="12 19 5 12 12 5"></polyline>
+                    </svg>
+                    <span>Back</span>
+                </button>
+            </div>
+
+            <!-- Series Hero / Header Card -->
+            <div class="series-card">
+                <div class="series-poster-wrap">
+                    <img id="series-poster" src="" alt="Poster" class="series-poster" />
+                </div>
+                <div class="series-info">
+                    <div class="series-title-row">
+                        <h2 id="series-title">Series Title</h2>
+                        <button type="button" id="series-bookmark-btn" class="bookmark-toggle-btn" title="Toggle Bookmark">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                            </svg>
+                            <span id="series-bookmark-text">Bookmark</span>
+                        </button>
+                    </div>
+
+                    <div class="series-meta-chips" id="series-meta-chips">
+                        <!-- Dynamic metadata badges (Status, Studio, Episodes) -->
+                    </div>
+
+                    <div class="synopsis-wrapper">
+                        <p class="series-synopsis collapsed" id="series-synopsis"></p>
+                        <button type="button" id="synopsis-toggle-btn" class="text-toggle-btn hidden">Read more ▼</button>
+                    </div>
+
+                    <!-- Individual Progress Card -->
+                    <div id="series-progress-box" class="progress-box hidden">
+                        <span class="progress-label">📍 Individual Progress:</span>
+                        <span class="progress-val" id="series-progress-text">None</span>
                     </div>
                 </div>
             </div>
 
-            <!-- Results Section -->
-            <section id="results-section" class="results-section hidden">
-                <div class="results-header">
-                    <div class="results-meta">
-                        <span class="meta-badge count-badge" id="results-count">0 Links Found</span>
-                        <span class="meta-badge source-badge" id="results-source">Source: -</span>
+            <!-- Episodes Section -->
+            <div class="episodes-container">
+                <div class="episodes-control-bar">
+                    <div class="episodes-count-heading">
+                        <h3>Episodes (<span id="episodes-total-count">0</span>)</h3>
                     </div>
-                    <button type="button" id="open-all-btn" class="action-btn secondary hidden">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-                            <polyline points="15 3 21 3 21 9"></polyline>
-                            <line x1="10" y1="14" x2="21" y2="3"></line>
-                        </svg>
-                        <span>Open All in SaveTheVideo</span>
-                    </button>
+
+                    <div class="episodes-toolbar">
+                        <div class="episode-filter-wrap">
+                            <input type="text" id="episode-filter-input" placeholder="Find Ep (e.g. 15, 208)..." autocomplete="off" />
+                        </div>
+                        <button type="button" id="sort-order-btn" class="action-btn secondary">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                <polyline points="19 12 12 19 5 12"></polyline>
+                            </svg>
+                            <span id="sort-btn-text">Newest First</span>
+                        </button>
+                        <button type="button" id="batch-download-modal-btn" class="action-btn primary-action">
+                            <span>⚡ Batch Download</span>
+                        </button>
+                    </div>
                 </div>
 
-                <div id="links-list" class="links-list">
-                    <!-- Dynamic link items will be inserted here -->
+                <!-- Batch Download Drawer / Panel -->
+                <div id="batch-panel" class="batch-panel hidden">
+                    <div class="batch-panel-header">
+                        <h4>⚡ Batch Download Episodes</h4>
+                        <button type="button" id="batch-close-btn" class="icon-btn">&times;</button>
+                    </div>
+                    <p class="batch-panel-desc">Quickly extract and open a sequence of episodes in SaveTheVideo tabs.</p>
+                    <div class="batch-inputs-row">
+                        <div class="batch-input-group">
+                            <label>From Episode #:</label>
+                            <input type="number" id="batch-from-input" min="1" placeholder="1" />
+                        </div>
+                        <div class="batch-input-group">
+                            <label>To Episode #:</label>
+                            <input type="number" id="batch-to-input" min="1" placeholder="5" />
+                        </div>
+                        <button type="button" id="batch-execute-btn" class="submit-btn">
+                            <span>Open Range</span>
+                        </button>
+                        <button type="button" id="batch-next-5-btn" class="action-btn secondary">
+                            <span>Next 5 Unwatched</span>
+                        </button>
+                    </div>
+                    <div id="batch-status" class="batch-status hidden"></div>
                 </div>
-            </section>
-        </main>
+
+                <!-- Episode Cards Grid -->
+                <div id="episodes-grid" class="episodes-grid">
+                    <!-- Dynamic episode buttons inserted here -->
+                </div>
+            </div>
+        </section>
 
         <!-- Footer -->
         <footer class="app-footer">
-            <p>TheAnimeLink Extractor &bull; Built with FastAPI &amp; curl_cffi Chrome124 Spoofing</p>
+            <p>TheAnimeLink Hub &bull; Powered by curl_cffi Chrome124 &amp; FastAPI</p>
         </footer>
     </div>
 
-    <!-- Toast Notification -->
+    <!-- Episode Action Modal -->
+    <div id="episode-modal" class="modal-overlay hidden">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div>
+                    <h3 id="modal-episode-title">Episode -</h3>
+                    <span class="modal-subtitle" id="modal-series-name">Series Name</span>
+                </div>
+                <button type="button" id="modal-close-btn" class="modal-close-btn" title="Close modal">&times;</button>
+            </div>
+            
+            <div class="modal-body">
+                <!-- Loading state -->
+                <div id="modal-loading" class="modal-loading">
+                    <div class="spinner large"></div>
+                    <p>Extracting video stream from LuciferDonghua...</p>
+                </div>
+
+                <!-- Extracted Stream ready -->
+                <div id="modal-success" class="modal-success hidden">
+                    <div class="modal-stream-info">
+                        <span class="stream-source-badge" id="modal-source-badge">Dailymotion Player</span>
+                        <span class="stream-url-preview" id="modal-stream-url">https://...</span>
+                    </div>
+
+                    <div class="modal-actions-primary">
+                        <a href="#" id="modal-open-stv-btn" target="_blank" rel="noopener noreferrer" class="submit-btn full-width">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                            <span>Open in SaveTheVideo</span>
+                        </a>
+                        <button type="button" id="modal-copy-link-btn" class="action-btn secondary full-width">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                            <span id="modal-copy-link-text">Copy Direct Stream URL</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Extracted Stream Failed / Fallback -->
+                <div id="modal-failed" class="modal-failed hidden">
+                    <p class="modal-error-msg" id="modal-error-msg">No direct video embed found on this episode page.</p>
+                </div>
+
+                <!-- Always available fallback to LuciferDonghua directly -->
+                <div class="modal-fallback-section">
+                    <span class="fallback-divider">OR VISIT DIRECTLY</span>
+                    <a href="#" id="modal-open-original-btn" target="_blank" rel="noopener noreferrer" class="action-btn outline full-width">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10z"></path></svg>
+                        <span>Open Episode on LuciferDonghua Directly</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Global Toast -->
     <div id="toast" class="toast hidden">Copied to clipboard!</div>
 
     <script src="/static/script.js"></script>

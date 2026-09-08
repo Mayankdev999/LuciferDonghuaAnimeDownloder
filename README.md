@@ -1,18 +1,18 @@
-# TheAnimeLink - Video Source & Iframe Extractor
+# TheAnimeLink - Universal Donghua Hub & Video Extractor
 
-A lightweight, full-stack local web application that extracts embedded iframe and Dailymotion video source links from target webpage URLs using advanced browser TLS/JA3 spoofing (`curl_cffi` with `chrome124` impersonation).
+A modern, full-stack application that provides in-app Donghua browsing, search, dynamic episode listings, per-anime watch/download progress tracking, and 1-click SaveTheVideo downloading using advanced browser TLS/JA3 impersonation (`curl_cffi` with `chrome124`).
 
 ---
 
 ## Features
 
-- **Advanced Bot Impersonation**: Uses `curl_cffi` with `impersonate="chrome124"` to mimic real Chrome browser TLS signatures and JA3 fingerprints.
-- **Two-Stage Extraction Pipeline**:
-  - **Stage 1 (DOM Selector)**: Scrapes `#pembed div iframe` or `#pembed iframe` directly from the DOM and resolves absolute paths.
-  - **Stage 2 (Dailymotion Fallback)**: Scans raw HTML with regex to extract embedded Dailymotion stream URLs, cleaning and deduplicating matches.
-- **FastAPI REST Backend**: Validated payloads using Pydantic and JSON responses with diagnostic error handling.
-- **SaveTheVideo Integration**: Automatically encodes and routes extracted video stream links directly to `https://www.savethevideo.com/home?url=<encoded_link>` for 1-click downloading/viewing.
-- **Modern Dark-Mode UI**: Glassmorphic styling, real-time loading feedback, and direct redirection buttons.
+- **Universal Search & Catalog**: Search and browse any anime on LuciferDonghua without ads or popups.
+- **Dynamic Episode Browser**: Automatically lists all episodes for any series (whether 6, 52, or 500+ episodes) with instant episode search and Oldest/Newest sort toggle.
+- **⭐ Persistent Bookmarks**: Pin your favorite series to the home screen using `localStorage` ($0 cost, instant load).
+- **Independent Progress Tracker**: Remembers the last downloaded episode for **each anime individually** (e.g. *Perfect World* tracks Ep 3 separately from *BTTH* tracking Ep 208).
+- **⚡ Batch Range Downloader**: Extract and open an episode sequence (e.g. Ep 1 to Ep 5 or "Next 5 Unwatched") in SaveTheVideo tabs automatically.
+- **Advanced Bot Impersonation**: Uses `curl_cffi` with `impersonate="chrome124"` to bypass Cloudflare and bot protections.
+- **Direct Link Extractor**: Retains manual URL input for quick extraction of any standalone video or episode page.
 
 ---
 
