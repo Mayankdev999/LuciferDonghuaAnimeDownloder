@@ -371,7 +371,13 @@ def serve_index():
     """Serve the single-page frontend application."""
     index_file = os.path.join(STATIC_DIR, "index.html")
     if os.path.exists(index_file):
-        return FileResponse(index_file)
+        return FileResponse(
+            index_file,
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+            },
+        )
     return {"message": "TheAnimeLink API is running. Frontend index.html not found."}
 
 
