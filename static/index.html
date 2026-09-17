@@ -10,7 +10,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=2.1.0">
+    <link rel="stylesheet" href="/static/style.css?v=2.3.0">
 </head>
 <body>
     <div class="background-glow top-left"></div>
@@ -29,9 +29,18 @@
                     <h1>TheAnimeLink <span>Hub</span></h1>
                 </div>
             </div>
-            <div class="header-badge">
-                <span class="status-indicator"></span>
-                <span>Chrome 124 JA3 Bypass</span>
+            <div class="header-actions">
+                <button type="button" id="sync-modal-btn" class="header-sync-btn" title="Sync bookmarks across mobile & laptop">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"></path>
+                    </svg>
+                    <span id="sync-btn-label">Sync Devices</span>
+                    <span id="sync-btn-indicator" class="sync-indicator-dot hidden"></span>
+                </button>
+                <div class="header-badge">
+                    <span class="status-indicator"></span>
+                    <span>Chrome 124 JA3 Bypass</span>
+                </div>
             </div>
         </header>
 
@@ -135,6 +144,53 @@
                     <button type="button" class="quick-pick-chip">Soul Land 2</button>
                     <button type="button" class="quick-pick-chip">A Will Eternal</button>
                     <button type="button" class="quick-pick-chip">Throne of Seal</button>
+                </div>
+            </div>
+
+            <!-- WEEKLY BROADCAST SCHEDULE SECTION (Default on fresh load) -->
+            <div id="weekly-schedule-container" class="weekly-schedule-container">
+                <div class="schedule-header">
+                    <div class="schedule-title-wrapper">
+                        <div class="schedule-title-icon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                <line x1="16" y1="2" x2="16" y2="6"></line>
+                                <line x1="8" y1="2" x2="8" y2="6"></line>
+                                <line x1="3" y1="10" x2="21" y2="10"></line>
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="schedule-title">Weekly Broadcast Schedule</h3>
+                            <p class="schedule-subtitle">Upcoming and latest episode releases by day</p>
+                        </div>
+                    </div>
+                    <button type="button" id="schedule-refresh-btn" class="icon-btn-secondary" title="Refresh Schedule">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+                        </svg>
+                        <span class="refresh-text">Refresh</span>
+                    </button>
+                </div>
+
+                <!-- Day Selector Tabs: Mon, Tue, Wed, Thu, Fri, Sat, Sun -->
+                <div class="schedule-day-tabs" id="schedule-day-tabs">
+                    <!-- Injected dynamically via script.js -->
+                </div>
+
+                <!-- Schedule Anime Cards Grid -->
+                <div class="schedule-content" id="schedule-content">
+                    <div class="anime-grid" id="schedule-grid">
+                        <!-- Cards injected dynamically -->
+                    </div>
+                    <div id="schedule-empty" class="empty-state hidden">
+                        <div class="empty-icon">📅</div>
+                        <h3>No Broadcasts Scheduled</h3>
+                        <p>No episodes are listed for this day.</p>
+                    </div>
+                    <div id="schedule-loading" class="schedule-loading-state hidden">
+                        <div class="spinner-large"></div>
+                        <p>Loading Weekly Schedule from LuciferDonghua...</p>
+                    </div>
                 </div>
             </div>
 
@@ -369,9 +425,79 @@
         </div>
     </div>
 
+    <!-- Cloud Sync Modal -->
+    <div id="sync-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+        <div class="modal-card sync-modal-card">
+            <div class="modal-header">
+                <div class="modal-title-wrap">
+                    <div class="modal-title-icon sync-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3>Cloud Device Sync</h3>
+                        <p class="modal-subtitle">Keep bookmarks and download checkmarks synced on all your devices</p>
+                    </div>
+                </div>
+                <button type="button" id="sync-modal-close-btn" class="modal-close-btn" title="Close">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+
+            <div class="modal-body">
+                <!-- Sync Status Card -->
+                <div id="sync-status-box" class="sync-status-box disconnected">
+                    <div class="sync-status-indicator">
+                        <span class="sync-status-dot"></span>
+                        <strong id="sync-status-title">Not Connected to Cloud</strong>
+                    </div>
+                    <p id="sync-status-desc">Enter or generate a Sync Key below to sync with your other devices.</p>
+                </div>
+
+                <!-- Sync Key Form -->
+                <div class="sync-input-group">
+                    <label for="sync-key-input">Your Secret Sync Key</label>
+                    <div class="sync-input-wrapper">
+                        <input 
+                            type="text" 
+                            id="sync-key-input" 
+                            placeholder="e.g. mayank99 or click Generate" 
+                            autocomplete="off" 
+                            spellcheck="false" 
+                            maxlength="32"
+                        />
+                        <button type="button" id="sync-generate-btn" class="action-btn outline small" title="Generate random sync key">
+                            🎲 Generate
+                        </button>
+                    </div>
+                    <span class="input-hint">Use this <b>exact same key</b> on your mobile and laptop browser.</span>
+                </div>
+
+                <!-- Sync Actions -->
+                <div class="modal-actions-list">
+                    <button type="button" id="sync-save-btn" class="action-btn primary full-width">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                        <span id="sync-save-text">Connect & Sync Now</span>
+                    </button>
+                    <button type="button" id="sync-disconnect-btn" class="action-btn outline danger full-width hidden">
+                        Disconnect Sync Key
+                    </button>
+                </div>
+
+                <div class="sync-info-tip">
+                    <div class="tip-icon">💡</div>
+                    <div class="tip-text">
+                        <strong>Zero Accounts Required:</strong> Any device entering this same Sync Key will automatically share your saved bookmarks and downloaded episode checkmarks in real-time.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Global Toast -->
     <div id="toast" class="toast hidden">Copied to clipboard!</div>
 
-    <script src="/static/script.js?v=2.1.0"></script>
+    <script src="/static/script.js?v=2.3.0"></script>
 </body>
 </html>

@@ -1,10 +1,14 @@
+import json
 import os
 import re
+import threading
+import time
 from typing import List, Optional
 from urllib.parse import quote, urljoin, urlparse
 
 from bs4 import BeautifulSoup
 from curl_cffi import requests
+from curl_cffi.requests import exceptions
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -55,9 +59,9 @@ def fetch_html(url: str, timeout: int = 15) -> tuple[Optional[str], Optional[str
         )
         response.raise_for_status()
         return response.text, None
-    except requests.errors.Timeout:
+    except exceptions.Timeout:
         return None, "Request timed out while connecting to the target webpage (15s timeout)."
-    except requests.errors.RequestsError as e:
+    except (requests.errors.RequestsError, exceptions.RequestException) as e:
         return None, f"Network/connection error: {str(e)}"
     except Exception as e:
         return None, f"Failed to fetch webpage: {str(e)}"
@@ -358,7 +362,311 @@ def series_endpoint(url: str = Query(..., description="Series page URL to extrac
 
 
 # -------------------------------------------------------------
-# 4. STATIC FILE SERVING
+# 4. WEEKLY SCHEDULE ENDPOINT (Home Schedule Scraper & Cache)
+# -------------------------------------------------------------
+
+DAY_NAME_MAP = {
+    "mon": "Monday",
+    "tue": "Tuesday",
+    "wed": "Wednesday",
+    "thu": "Thursday",
+    "fri": "Friday",
+    "sat": "Saturday",
+    "sun": "Sunday",
+}
+
+_SCHEDULE_CACHE = {
+    "data": None,
+    "timestamp": 0.0,
+}
+SCHEDULE_CACHE_TTL = 900  # 15 minutes (in seconds)
+
+
+def parse_weekly_schedule(html_content: str, base_url: str = "https://luciferdonghua.in/") -> dict:
+    """Parses the weekly release schedule from luciferdonghua.in HTML."""
+    if not html_content:
+        return {"success": False, "error": "Empty HTML content.", "days": [], "today": ""}
+
+    soup = BeautifulSoup(html_content, "html.parser")
+    sched_box = soup.select_one("#lucifer-schedule") or soup.select_one(".lucifer-sched-box")
+    if not sched_box:
+        return {"success": False, "error": "Weekly schedule section not found on page.", "days": [], "today": ""}
+
+    days = []
+    today_key = ""
+
+    # Parse day selector tabs
+    day_tabs = sched_box.select(".lucifer-day-tabs .lucifer-day-tab")
+    for tab in day_tabs:
+        day_key = tab.get("data-day", "").strip().lower()
+        if not day_key:
+            continue
+        d_el = tab.select_one(".d")
+        n_el = tab.select_one(".n")
+        d_text = d_el.get_text(strip=True) if d_el else day_key.capitalize()
+        count_text = n_el.get_text(strip=True) if n_el else ""
+
+        is_today = "today" in d_text.lower()
+        if is_today or (not today_key and "on" in tab.get("class", [])):
+            today_key = day_key
+
+        days.append({
+            "key": day_key,
+            "short_name": day_key.capitalize(),
+            "full_name": DAY_NAME_MAP.get(day_key, day_key.capitalize()),
+            "label": d_text,
+            "count": count_text,
+            "is_today": is_today,
+            "items": [],
+        })
+
+    day_map = {d["key"]: d for d in days}
+
+    # Parse items in each day list
+    day_lists = sched_box.select(".lucifer-day-list")
+    for d_list in day_lists:
+        d_key = d_list.get("data-day", "").strip().lower()
+        target_day = day_map.get(d_key)
+        if not target_day:
+            target_day = {
+                "key": d_key,
+                "short_name": d_key.capitalize(),
+                "full_name": DAY_NAME_MAP.get(d_key, d_key.capitalize()),
+                "label": d_key.capitalize(),
+                "count": "",
+                "is_today": False,
+                "items": [],
+            }
+            days.append(target_day)
+            day_map[d_key] = target_day
+
+        for item_a in d_list.select(".lucifer-sched-item"):
+            href = item_a.get("href", "").strip()
+            if not href:
+                continue
+            full_url = urljoin(base_url, href)
+
+            img = item_a.select_one("img")
+            poster = ""
+            if img:
+                poster = img.get("src") or img.get("data-src") or ""
+                poster = urljoin(base_url, poster)
+
+            t_el = item_a.select_one(".si-t")
+            s_el = item_a.select_one(".si-s")
+            badge_el = item_a.select_one(".lucifer-badge")
+
+            title = t_el.get_text(strip=True) if t_el else "Unknown Title"
+            expected = s_el.get_text(strip=True) if s_el else ""
+            badge = badge_el.get_text(strip=True) if badge_el else ""
+            is_airing = "today" in badge.lower() or (badge_el and "today" in badge_el.get("class", []))
+
+            if is_airing and not today_key:
+                today_key = d_key
+
+            target_day["items"].append({
+                "title": title,
+                "url": full_url,
+                "poster": poster,
+                "expected": expected,
+                "badge": badge,
+                "is_airing_today": is_airing,
+            })
+
+    # Default today if still not set
+    if not today_key and days:
+        today_key = days[0]["key"]
+
+    return {
+        "success": True,
+        "today": today_key,
+        "days": days,
+    }
+
+
+def get_weekly_schedule(force_refresh: bool = False) -> dict:
+    """Fetches and caches the weekly broadcast schedule with 15-minute TTL."""
+    global _SCHEDULE_CACHE
+    now = time.time()
+    if not force_refresh and _SCHEDULE_CACHE["data"] and (now - _SCHEDULE_CACHE["timestamp"] < SCHEDULE_CACHE_TTL):
+        return {**_SCHEDULE_CACHE["data"], "cached": True}
+
+    raw_html, error = fetch_html("https://luciferdonghua.in/")
+    if error or not raw_html:
+        # If fetch fails but we have stale cache, gracefully return stale cache
+        if _SCHEDULE_CACHE["data"]:
+            return {**_SCHEDULE_CACHE["data"], "cached": True, "stale": True}
+        return {"success": False, "error": error or "Failed to load schedule from LuciferDonghua.", "days": [], "today": ""}
+
+    schedule_data = parse_weekly_schedule(raw_html, base_url="https://luciferdonghua.in/")
+    if schedule_data.get("success"):
+        _SCHEDULE_CACHE["data"] = schedule_data
+        _SCHEDULE_CACHE["timestamp"] = now
+        return {**schedule_data, "cached": False}
+
+    if _SCHEDULE_CACHE["data"]:
+        return {**_SCHEDULE_CACHE["data"], "cached": True, "stale": True}
+    return schedule_data
+
+
+@app.get("/api/schedule")
+def schedule_endpoint(refresh: bool = Query(False, description="Force refresh the schedule cache")):
+    """Get the weekly broadcast schedule for Donghua releases."""
+    return get_weekly_schedule(force_refresh=refresh)
+
+
+# -------------------------------------------------------------
+# 5. CROSS-DEVICE CLOUD SYNC LOGIC & ENDPOINTS
+# -------------------------------------------------------------
+
+SYNC_STORE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "sync_store.json")
+_SYNC_LOCK = threading.Lock()
+
+
+def normalize_sync_key(key: str) -> str:
+    """Normalizes sync key: lowercase alphanumeric, hyphens, underscores (2-64 chars)."""
+    if not key:
+        return ""
+    clean = re.sub(r"[^a-z0-9_\-]", "", key.strip().lower())
+    return clean
+
+
+def read_sync_store() -> dict:
+    """Safely reads the JSON sync store."""
+    if not os.path.exists(SYNC_STORE_PATH):
+        return {}
+    try:
+        with open(SYNC_STORE_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def write_sync_store(data: dict) -> bool:
+    """Safely writes to the JSON sync store with atomic rename."""
+    try:
+        os.makedirs(os.path.dirname(SYNC_STORE_PATH), exist_ok=True)
+        temp_path = f"{SYNC_STORE_PATH}.tmp"
+        with open(temp_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        os.replace(temp_path, SYNC_STORE_PATH)
+        return True
+    except Exception as e:
+        print(f"Error writing sync store: {e}")
+        return False
+
+
+class SyncPushRequest(BaseModel):
+    key: str = Field(..., min_length=2, max_length=64, description="Secret Sync Passcode/Key")
+    bookmarks: Optional[List[dict]] = Field(default_factory=list)
+    progress: Optional[dict] = Field(default_factory=dict)
+
+
+def merge_sync_data(existing: dict, incoming_bookmarks: list, incoming_progress: dict) -> dict:
+    """Smart non-destructive merge of bookmarks and watch progress."""
+    now_ms = int(time.time() * 1000)
+
+    # 1. Merge bookmarks by url
+    bm_map = {}
+    for bm in existing.get("bookmarks", []):
+        url = bm.get("url")
+        if url:
+            bm_map[url] = bm
+
+    for bm in incoming_bookmarks:
+        url = bm.get("url")
+        if url:
+            bm_map[url] = bm
+
+    merged_bookmarks = list(bm_map.values())
+
+    # 2. Merge progress per series
+    prog_map = existing.get("progress", {}).copy()
+    for series_url, inc_data in incoming_progress.items():
+        if series_url not in prog_map:
+            prog_map[series_url] = inc_data
+        else:
+            cur = prog_map[series_url]
+            # Union of downloaded episode numbers
+            cur_eps = set(cur.get("downloaded_eps", []))
+            inc_eps = set(inc_data.get("downloaded_eps", []))
+            all_eps = sorted(
+                list(cur_eps | inc_eps),
+                key=lambda x: [int(c) if c.isdigit() else c for c in re.split(r'(\d+)', str(x))]
+            )
+
+            # Latest episode & timestamp
+            cur_time = cur.get("last_downloaded_at", 0) or 0
+            inc_time = inc_data.get("last_downloaded_at", 0) or 0
+            latest_ep = inc_data.get("last_ep_num") if inc_time >= cur_time else cur.get("last_ep_num")
+
+            prog_map[series_url] = {
+                "downloaded_eps": all_eps,
+                "last_ep_num": latest_ep or cur.get("last_ep_num") or inc_data.get("last_ep_num"),
+                "last_downloaded_at": max(cur_time, inc_time) or now_ms,
+            }
+
+    return {
+        "bookmarks": merged_bookmarks,
+        "progress": prog_map,
+        "synced_at": now_ms,
+    }
+
+
+@app.get("/api/sync/pull")
+def sync_pull_endpoint(key: str = Query(..., description="Secret sync key")):
+    """Pulls cloud bookmarks and download history for a given sync key."""
+    clean_key = normalize_sync_key(key)
+    if len(clean_key) < 2:
+        return {"success": False, "error": "Invalid sync key. Minimum 2 alphanumeric characters required."}
+
+    with _SYNC_LOCK:
+        store = read_sync_store()
+        vault = store.get(clean_key)
+
+    if not vault:
+        return {
+            "success": True,
+            "found": False,
+            "key": clean_key,
+            "data": None,
+            "message": "No existing cloud sync vault found for this key. Ready to create.",
+        }
+
+    return {
+        "success": True,
+        "found": True,
+        "key": clean_key,
+        "data": vault,
+    }
+
+
+@app.post("/api/sync/push")
+def sync_push_endpoint(req: SyncPushRequest):
+    """Pushes and non-destructively merges device bookmarks & progress into the cloud vault."""
+    clean_key = normalize_sync_key(req.key)
+    if len(clean_key) < 2:
+        return {"success": False, "error": "Invalid sync key. Minimum 2 alphanumeric characters required."}
+
+    with _SYNC_LOCK:
+        store = read_sync_store()
+        existing_vault = store.get(clean_key, {"bookmarks": [], "progress": {}})
+        merged_vault = merge_sync_data(existing_vault, req.bookmarks or [], req.progress or {})
+        store[clean_key] = merged_vault
+        write_sync_store(store)
+
+    return {
+        "success": True,
+        "key": clean_key,
+        "synced_at": merged_vault["synced_at"],
+        "bookmarks_count": len(merged_vault["bookmarks"]),
+        "series_progress_count": len(merged_vault["progress"]),
+        "data": merged_vault,
+    }
+
+
+# -------------------------------------------------------------
+# 6. STATIC FILE SERVING
 # -------------------------------------------------------------
 
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")

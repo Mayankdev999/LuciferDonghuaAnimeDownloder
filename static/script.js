@@ -29,6 +29,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const searchCount = document.getElementById('search-count');
     const quickPickChips = document.querySelectorAll('.quick-pick-chip');
 
+    // Weekly Schedule Elements
+    const weeklyScheduleContainer = document.getElementById('weekly-schedule-container');
+    const scheduleDayTabs = document.getElementById('schedule-day-tabs');
+    const scheduleGrid = document.getElementById('schedule-grid');
+    const scheduleEmpty = document.getElementById('schedule-empty');
+    const scheduleLoading = document.getElementById('schedule-loading');
+    const scheduleRefreshBtn = document.getElementById('schedule-refresh-btn');
+    let weeklyScheduleData = null;
+    let currentScheduleDayKey = '';
+
     // Direct URL Tab
     const extractForm = document.getElementById('extract-form');
     const targetUrlInput = document.getElementById('target-url');
@@ -80,8 +90,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const modalStreamUrl = document.getElementById('modal-stream-url');
     const modalOpenStvBtn = document.getElementById('modal-open-stv-btn');
     const modalCopyLinkBtn = document.getElementById('modal-copy-link-btn');
-    const modalCopyLinkText = document.getElementById('modal-copy-link-text');
     const modalOpenOriginalBtn = document.getElementById('modal-open-original-btn');
+
+    // Cloud Sync Elements
+    const syncModalBtn = document.getElementById('sync-modal-btn');
+    const syncBtnLabel = document.getElementById('sync-btn-label');
+    const syncBtnIndicator = document.getElementById('sync-btn-indicator');
+    const syncModal = document.getElementById('sync-modal');
+    const syncModalCloseBtn = document.getElementById('sync-modal-close-btn');
+    const syncStatusBox = document.getElementById('sync-status-box');
+    const syncStatusTitle = document.getElementById('sync-status-title');
+    const syncStatusDesc = document.getElementById('sync-status-desc');
+    const syncKeyInput = document.getElementById('sync-key-input');
+    const syncGenerateBtn = document.getElementById('sync-generate-btn');
+    const syncSaveBtn = document.getElementById('sync-save-btn');
+    const syncSaveText = document.getElementById('sync-save-text');
+    const syncDisconnectBtn = document.getElementById('sync-disconnect-btn');
 
     // Memory variables
     let currentSeriesData = null;
@@ -90,10 +114,12 @@ document.addEventListener('DOMContentLoaded', () => {
     let previousActiveTab = 'bookmarks-tab';
     let directLinks = [];
     let currentModalStreamUrl = '';
+    let cloudPushTimeout = null;
 
     // LocalStorage Keys
     const LS_BOOKMARKS_KEY = 'theanimelink_bookmarks';
     const LS_PROGRESS_KEY = 'theanimelink_progress_v2';
+    const LS_SYNC_KEY = 'theanimelink_sync_key';
 
     // ----------------------------------------------------------------
     // 1. LOCALSTORAGE MANAGERS (Per-Anime Progress & Bookmarks)
@@ -134,6 +160,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateBookmarksCountBadge();
         renderBookmarksTab();
         updateSeriesBookmarkButton();
+        scheduleCloudPush(); // Auto-sync to cloud
     }
 
     function getAllProgress() {
@@ -169,12 +196,241 @@ document.addEventListener('DOMContentLoaded', () => {
 
         updateSeriesProgressBadge();
         renderBookmarksTab();
+        scheduleCloudPush(); // Auto-sync to cloud
     }
 
     function isEpisodeDownloaded(animeUrl, epNum) {
         const progress = getAnimeProgress(animeUrl);
         if (!progress || !progress.downloaded_eps) return false;
         return progress.downloaded_eps.includes(epNum);
+    }
+
+    // ----------------------------------------------------------------
+    // 1.5. CLOUD SYNC ENGINE (Multi-Device Sync via Secret Key)
+    // ----------------------------------------------------------------
+
+    function getSyncKey() {
+        return (localStorage.getItem(LS_SYNC_KEY) || '').trim().toLowerCase();
+    }
+
+    function setSyncKey(key) {
+        const clean = (key || '').trim().toLowerCase().replace(/[^a-z0-9_\-]/g, '');
+        if (clean) {
+            localStorage.setItem(LS_SYNC_KEY, clean);
+        } else {
+            localStorage.removeItem(LS_SYNC_KEY);
+        }
+        updateSyncUI();
+        return clean;
+    }
+
+    function removeSyncKey() {
+        localStorage.removeItem(LS_SYNC_KEY);
+        updateSyncUI();
+    }
+
+    function updateSyncUI() {
+        if (!syncModalBtn) return;
+        const key = getSyncKey();
+
+        if (key) {
+            syncModalBtn.classList.add('connected');
+            syncBtnLabel.textContent = `Synced: ${key}`;
+            syncBtnIndicator.classList.remove('hidden');
+
+            if (syncStatusBox) syncStatusBox.className = 'sync-status-box connected';
+            if (syncStatusTitle) syncStatusTitle.textContent = `Connected: "${key}"`;
+            if (syncStatusDesc) syncStatusDesc.textContent = 'Bookmarks and downloaded episode history are actively synced with the cloud.';
+            if (syncKeyInput) syncKeyInput.value = key;
+            if (syncSaveText) syncSaveText.textContent = 'Sync Now';
+            if (syncDisconnectBtn) syncDisconnectBtn.classList.remove('hidden');
+        } else {
+            syncModalBtn.classList.remove('connected');
+            syncBtnLabel.textContent = 'Sync Devices';
+            syncBtnIndicator.classList.add('hidden');
+
+            if (syncStatusBox) syncStatusBox.className = 'sync-status-box disconnected';
+            if (syncStatusTitle) syncStatusTitle.textContent = 'Not Connected to Cloud';
+            if (syncStatusDesc) syncStatusDesc.textContent = 'Enter or generate a Sync Key below to sync with your other devices.';
+            if (syncKeyInput) syncKeyInput.value = '';
+            if (syncSaveText) syncSaveText.textContent = 'Connect & Sync Now';
+            if (syncDisconnectBtn) syncDisconnectBtn.classList.add('hidden');
+        }
+    }
+
+    function scheduleCloudPush() {
+        const key = getSyncKey();
+        if (!key) return;
+
+        clearTimeout(cloudPushTimeout);
+        cloudPushTimeout = setTimeout(() => {
+            pushCloudSync();
+        }, 800);
+    }
+
+    async function pushCloudSync() {
+        const key = getSyncKey();
+        if (!key) return;
+
+        const bookmarks = getBookmarks();
+        const progress = getAllProgress();
+
+        try {
+            await fetch('/api/sync/push', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    key: key,
+                    bookmarks: bookmarks,
+                    progress: progress
+                })
+            });
+        } catch (e) {
+            console.warn('Cloud sync push failed:', e);
+        }
+    }
+
+    async function pullAndMergeSync(showFeedback = false) {
+        const key = getSyncKey();
+        if (!key) return;
+
+        if (showFeedback && syncSaveBtn) {
+            syncSaveBtn.disabled = true;
+            syncSaveText.textContent = 'Syncing...';
+        }
+
+        try {
+            const res = await fetch(`/api/sync/pull?key=${encodeURIComponent(key)}`);
+            const data = await res.json();
+
+            if (data.success && data.found && data.data) {
+                const cloudBookmarks = data.data.bookmarks || [];
+                const cloudProgress = data.data.progress || {};
+
+                // 1. Union bookmarks with local
+                const localBookmarks = getBookmarks();
+                const bmUrlMap = new Map();
+                localBookmarks.forEach(b => { if (b.url) bmUrlMap.set(b.url, b); });
+                cloudBookmarks.forEach(b => {
+                    if (b.url && !bmUrlMap.has(b.url)) {
+                        bmUrlMap.set(b.url, b);
+                    }
+                });
+                const mergedBookmarks = Array.from(bmUrlMap.values());
+                localStorage.setItem(LS_BOOKMARKS_KEY, JSON.stringify(mergedBookmarks));
+
+                // 2. Union progress per series
+                const localProgress = getAllProgress();
+                for (const [sUrl, cProg] of Object.entries(cloudProgress)) {
+                    const lProg = localProgress[sUrl] || { downloaded_eps: [] };
+                    const unionSet = new Set([...(lProg.downloaded_eps || []), ...(cProg.downloaded_eps || [])]);
+
+                    const cTime = cProg.last_downloaded_at || 0;
+                    const lTime = lProg.timestamp || 0;
+                    const latestEp = cTime >= lTime ? (cProg.last_ep_num || lProg.last_ep_num) : (lProg.last_ep_num || cProg.last_ep_num);
+
+                    localProgress[sUrl] = {
+                        downloaded_eps: Array.from(unionSet),
+                        last_ep_num: latestEp,
+                        last_ep_title: lProg.last_ep_title || cProg.last_ep_title || '',
+                        last_ep_url: lProg.last_ep_url || cProg.last_ep_url || '',
+                        timestamp: Math.max(cTime, lTime)
+                    };
+                }
+                localStorage.setItem(LS_PROGRESS_KEY, JSON.stringify(localProgress));
+
+                // Push merged union back to server so cloud has full union
+                await pushCloudSync();
+
+                // Re-render
+                updateBookmarksCountBadge();
+                renderBookmarksTab();
+                updateSeriesBookmarkButton();
+                updateSeriesProgressBadge();
+
+                if (showFeedback) {
+                    showToast(`Synced ${mergedBookmarks.length} bookmarks across devices!`);
+                }
+            } else if (data.success && !data.found) {
+                // Key is new: push current local state to initialize cloud vault
+                await pushCloudSync();
+                if (showFeedback) {
+                    showToast(`Cloud vault created for "${key}"!`);
+                }
+            }
+        } catch (e) {
+            console.error('Pull sync error:', e);
+            if (showFeedback) {
+                showToast('Could not reach cloud sync server.');
+            }
+        } finally {
+            if (showFeedback && syncSaveBtn) {
+                syncSaveBtn.disabled = false;
+                syncSaveText.textContent = 'Sync Now';
+            }
+        }
+    }
+
+    // Modal event listeners
+    if (syncModalBtn) {
+        syncModalBtn.addEventListener('click', () => {
+            updateSyncUI();
+            syncModal.classList.remove('hidden');
+            if (!getSyncKey() && syncKeyInput) {
+                syncKeyInput.focus();
+            }
+        });
+    }
+
+    if (syncModalCloseBtn) {
+        syncModalCloseBtn.addEventListener('click', () => {
+            syncModal.classList.add('hidden');
+        });
+    }
+
+    if (syncModal) {
+        syncModal.addEventListener('click', (e) => {
+            if (e.target === syncModal) {
+                syncModal.classList.add('hidden');
+            }
+        });
+    }
+
+    if (syncGenerateBtn) {
+        syncGenerateBtn.addEventListener('click', () => {
+            const rand = Math.floor(100 + Math.random() * 900);
+            const words = ['donghua', 'anime', 'sync', 'stream', 'cloud', 'lucifer'];
+            const word = words[Math.floor(Math.random() * words.length)];
+            syncKeyInput.value = `${word}-${rand}`;
+            syncKeyInput.focus();
+        });
+    }
+
+    if (syncSaveBtn) {
+        syncSaveBtn.addEventListener('click', async () => {
+            const entered = (syncKeyInput.value || '').trim().toLowerCase().replace(/[^a-z0-9_\-]/g, '');
+            if (entered.length < 2) {
+                showToast('Please enter at least 2 characters for your Sync Key');
+                syncKeyInput.focus();
+                return;
+            }
+
+            setSyncKey(entered);
+            await pullAndMergeSync(true);
+            setTimeout(() => {
+                syncModal.classList.add('hidden');
+            }, 1000);
+        });
+    }
+
+    if (syncDisconnectBtn) {
+        syncDisconnectBtn.addEventListener('click', () => {
+            if (confirm('Disconnect this Sync Key? Your bookmarks will stay on this device, but new changes won\'t sync to other devices until you reconnect.')) {
+                removeSyncKey();
+                showToast('Disconnected from cloud sync.');
+                syncModal.classList.add('hidden');
+            }
+        });
     }
 
     function updateBookmarksCountBadge() {
@@ -334,12 +590,25 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     searchInput.addEventListener('input', () => {
-        searchClearBtn.classList.toggle('hidden', searchInput.value.trim().length === 0);
+        const hasText = searchInput.value.trim().length > 0;
+        searchClearBtn.classList.toggle('hidden', !hasText);
+        if (!hasText) {
+            searchResultsWrapper.classList.add('hidden');
+            searchGrid.innerHTML = '';
+            if (weeklyScheduleContainer) {
+                weeklyScheduleContainer.classList.remove('hidden');
+            }
+        }
     });
 
     searchClearBtn.addEventListener('click', () => {
         searchInput.value = '';
         searchClearBtn.classList.add('hidden');
+        searchResultsWrapper.classList.add('hidden');
+        searchGrid.innerHTML = '';
+        if (weeklyScheduleContainer) {
+            weeklyScheduleContainer.classList.remove('hidden');
+        }
         searchInput.focus();
     });
 
@@ -350,6 +619,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         setSearchLoading(true);
         hideStatus();
+        if (weeklyScheduleContainer) {
+            weeklyScheduleContainer.classList.add('hidden');
+        }
         searchResultsWrapper.classList.add('hidden');
         searchGrid.innerHTML = '';
 
@@ -383,6 +655,186 @@ document.addEventListener('DOMContentLoaded', () => {
         searchSubmitBtn.disabled = isLoading;
         searchSubmitBtn.querySelector('.btn-text').textContent = isLoading ? 'Searching...' : 'Search';
         searchSubmitBtn.querySelector('.spinner').classList.toggle('hidden', !isLoading);
+    }
+
+    // ----------------------------------------------------------------
+    // 5.5. WEEKLY SCHEDULE (Broadcast Schedule)
+    // ----------------------------------------------------------------
+
+    async function fetchWeeklySchedule(forceRefresh = false) {
+        if (!weeklyScheduleContainer) return;
+
+        if (!weeklyScheduleData) {
+            scheduleLoading.classList.remove('hidden');
+            scheduleEmpty.classList.add('hidden');
+            scheduleGrid.classList.add('hidden');
+        }
+
+        if (forceRefresh && scheduleRefreshBtn) {
+            scheduleRefreshBtn.disabled = true;
+            scheduleRefreshBtn.querySelector('.refresh-text').textContent = 'Updating...';
+        }
+
+        try {
+            const res = await fetch(`/api/schedule?refresh=${forceRefresh ? 'true' : 'false'}`);
+            const data = await res.json();
+
+            if (data.success && data.days && data.days.length > 0) {
+                weeklyScheduleData = data;
+                if (!currentScheduleDayKey) {
+                    currentScheduleDayKey = data.today || data.days[0].key;
+                }
+                renderScheduleTabs();
+                renderScheduleDay(currentScheduleDayKey);
+                if (forceRefresh) {
+                    showToast('Schedule updated successfully!');
+                }
+            } else {
+                if (!weeklyScheduleData) {
+                    scheduleEmpty.classList.remove('hidden');
+                    scheduleGrid.classList.add('hidden');
+                }
+            }
+        } catch (err) {
+            console.error('Failed to load schedule:', err);
+            if (!weeklyScheduleData) {
+                scheduleEmpty.classList.remove('hidden');
+                scheduleGrid.classList.add('hidden');
+            }
+        } finally {
+            scheduleLoading.classList.add('hidden');
+            if (scheduleRefreshBtn) {
+                scheduleRefreshBtn.disabled = false;
+                scheduleRefreshBtn.querySelector('.refresh-text').textContent = 'Refresh';
+            }
+        }
+    }
+
+    function renderScheduleTabs() {
+        if (!weeklyScheduleData || !scheduleDayTabs) return;
+        scheduleDayTabs.innerHTML = '';
+
+        weeklyScheduleData.days.forEach(day => {
+            const tab = document.createElement('div');
+            tab.className = `schedule-day-tab ${day.key === currentScheduleDayKey ? 'active' : ''} ${day.is_today ? 'is-today' : ''}`;
+            tab.dataset.day = day.key;
+
+            tab.innerHTML = `
+                <span class="day-name">${escapeHtml(day.short_name || day.key)}</span>
+                <span class="day-count">${escapeHtml(day.count || '')}</span>
+                ${day.is_today ? '<span class="today-indicator">TODAY</span>' : ''}
+            `;
+
+            tab.addEventListener('click', () => {
+                currentScheduleDayKey = day.key;
+                document.querySelectorAll('.schedule-day-tab').forEach(t => {
+                    t.classList.toggle('active', t.dataset.day === day.key);
+                });
+                renderScheduleDay(day.key);
+            });
+
+            scheduleDayTabs.appendChild(tab);
+        });
+    }
+
+    function renderScheduleDay(dayKey) {
+        if (!weeklyScheduleData || !scheduleGrid) return;
+        scheduleGrid.innerHTML = '';
+
+        const day = weeklyScheduleData.days.find(d => d.key === dayKey);
+        if (!day || !day.items || day.items.length === 0) {
+            scheduleEmpty.classList.remove('hidden');
+            scheduleGrid.classList.add('hidden');
+            return;
+        }
+
+        scheduleEmpty.classList.add('hidden');
+        scheduleGrid.classList.remove('hidden');
+
+        day.items.forEach(item => {
+            const card = createScheduleCard(item);
+            scheduleGrid.appendChild(card);
+        });
+    }
+
+    function createScheduleCard(item) {
+        const card = document.createElement('div');
+        card.className = 'anime-card schedule-anime-card';
+
+        const bookmarked = isBookmarked(item.url);
+        const progress = getAnimeProgress(item.url);
+
+        let progressHtml = '';
+        if (progress && progress.last_ep_num) {
+            progressHtml = `
+                <div class="card-progress-pill" title="Last downloaded episode">
+                    <span>✓ Ep ${escapeHtml(progress.last_ep_num)}</span>
+                </div>
+            `;
+        }
+
+        let badgeHtml = '';
+        if (item.is_airing_today) {
+            badgeHtml = `<span class="card-badge airing-today-badge">🔥 Airing Today</span>`;
+        } else if (item.badge) {
+            badgeHtml = `<span class="card-badge status-badge">${escapeHtml(item.badge)}</span>`;
+        }
+
+        let expectedHtml = '';
+        if (item.expected) {
+            expectedHtml = `
+                <div class="schedule-card-expected" title="${escapeHtml(item.expected)}">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                    <span>${escapeHtml(item.expected)}</span>
+                </div>
+            `;
+        }
+
+        const fallbackPosterSvg = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='140'><rect fill='%23171c2a' width='100' height='140'/><text fill='%2364748b' x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' font-size='12'>No Poster</text></svg>";
+
+        card.innerHTML = `
+            <div class="anime-poster-wrapper">
+                <img src="${escapeHtml(item.poster || fallbackPosterSvg)}" alt="${escapeHtml(item.title)}" loading="lazy" onerror="this.src='${fallbackPosterSvg}'">
+                ${badgeHtml}
+                <button type="button" class="card-bookmark-btn ${bookmarked ? 'bookmarked' : ''}" title="${bookmarked ? 'Remove Bookmark' : 'Bookmark Series'}">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="${bookmarked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
+                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                    </svg>
+                </button>
+                ${progressHtml}
+            </div>
+            <div class="anime-card-content">
+                <h4 class="anime-card-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</h4>
+                ${expectedHtml}
+            </div>
+        `;
+
+        card.addEventListener('click', (e) => {
+            if (e.target.closest('.card-bookmark-btn')) return;
+            openSeries(item.url, { title: item.title, poster: item.poster });
+        });
+
+        const bBtn = card.querySelector('.card-bookmark-btn');
+        bBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleBookmark({
+                title: item.title,
+                url: item.url,
+                poster: item.poster,
+                status: item.badge || (item.is_airing_today ? 'Airing Today' : ''),
+            });
+            // Update bookmark icon on this card
+            const isNowBookmarked = isBookmarked(item.url);
+            bBtn.classList.toggle('bookmarked', isNowBookmarked);
+            bBtn.setAttribute('title', isNowBookmarked ? 'Remove Bookmark' : 'Bookmark Series');
+            bBtn.querySelector('svg').setAttribute('fill', isNowBookmarked ? 'currentColor' : 'none');
+        });
+
+        return card;
+    }
+
+    if (scheduleRefreshBtn) {
+        scheduleRefreshBtn.addEventListener('click', () => fetchWeeklySchedule(true));
     }
 
     // ----------------------------------------------------------------
@@ -951,6 +1403,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // 11. INITIALIZATION
     // ----------------------------------------------------------------
     updateBookmarksCountBadge();
+    fetchWeeklySchedule(); // Auto-fetch Weekly Schedule by default on load
+    updateSyncUI();
+    if (getSyncKey()) {
+        pullAndMergeSync(false); // Auto-sync on fresh page load
+    }
+
     const existingBookmarks = getBookmarks();
     if (existingBookmarks.length > 0) {
         switchTab('bookmarks-tab');

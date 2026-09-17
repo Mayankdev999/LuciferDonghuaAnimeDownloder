@@ -35,7 +35,8 @@ htmlcov/
 # IDE & OS
 .vscode/
 .idea/
-.DS_Store
 *.log
 backup_v1/
+data/
+*.db
 
