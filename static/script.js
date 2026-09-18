@@ -90,6 +90,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const modalStreamUrl = document.getElementById('modal-stream-url');
     const modalOpenStvBtn = document.getElementById('modal-open-stv-btn');
     const modalCopyLinkBtn = document.getElementById('modal-copy-link-btn');
+    const modalCopyLinkText = document.getElementById('modal-copy-link-text');
     const modalOpenOriginalBtn = document.getElementById('modal-open-original-btn');
 
     // Cloud Sync Elements
@@ -1030,18 +1031,21 @@ document.addEventListener('DOMContentLoaded', () => {
     async function openEpisodeActionModal(episode) {
         if (!episode || !episode.url) return;
 
-        modalEpisodeTitle.textContent = `Episode ${episode.num}`;
-        modalSeriesName.textContent = currentSeriesData ? currentSeriesData.title : '';
-        modalOpenOriginalBtn.href = episode.url;
+        // Show modal immediately so user sees responsiveness
+        if (episodeModal) {
+            episodeModal.classList.remove('hidden');
+        }
+
+        if (modalEpisodeTitle) modalEpisodeTitle.textContent = `Episode ${episode.num || '?'}`;
+        if (modalSeriesName) modalSeriesName.textContent = currentSeriesData ? currentSeriesData.title : '';
+        if (modalOpenOriginalBtn) modalOpenOriginalBtn.href = episode.url;
 
         // Reset modal state
-        modalLoading.classList.remove('hidden');
-        modalSuccess.classList.add('hidden');
-        modalFailed.classList.add('hidden');
-        modalCopyLinkText.textContent = 'Copy Direct Stream URL';
+        if (modalLoading) modalLoading.classList.remove('hidden');
+        if (modalSuccess) modalSuccess.classList.add('hidden');
+        if (modalFailed) modalFailed.classList.add('hidden');
+        if (modalCopyLinkText) modalCopyLinkText.textContent = 'Copy Direct Stream URL';
         currentModalStreamUrl = '';
-
-        episodeModal.classList.remove('hidden');
 
         try {
             const res = await fetch('/api/extract', {
